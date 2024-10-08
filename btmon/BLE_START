@@ -1,0 +1,6 @@
+sudo /usr/sbin/ntpdate -u 3.kr.pool.ntp.org &
+
+sudo /bin/hciconfig hci1 down &
+sudo /bin/hciconfig hci0 up &
+
+sudo /usr/bin/bluetoothctl -- scan on &

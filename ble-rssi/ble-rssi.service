@@ -1,0 +1,14 @@
+[Unit]
+Description=My BLE Start and Python Script Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/keti/ble/ble-rssi/main.py  # 그 다음에 파이썬 프로그램 실행
+WorkingDirectory=/home/keti/ble/ble-rssi
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target

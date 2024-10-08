@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tag Tracker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <style>
+        #map {
+            height: 1000px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Tag Tracker</h1>
+<select id="tagDropdown"></select>
+<div id="map"></div>
+
+<script>
+    let map = L.map('map').setView([37.403093, 127.160762], 17);
+    let dotIcon = L.icon({
+        iconUrl: '/static/dot.png',
+        iconSize: [7, 7], // size of the icon
+    });
+    let sensorIcon = L.icon({
+        iconUrl: '/static/sensor.png',
+        iconSize: [11, 11], // size of the icon
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 25,
+    }).addTo(map);
+
+    // 리시버 좌표 추가
+    let receivers = {
+        'receiver01': [37.405505, 127.164109],
+        // 'receiver02': [37.401542, 127.161244],
+        'receiver02': [37.405386, 127.158401] ,
+        'receiver03': [37.405386, 127.164109],
+        // 'receiver02': [37.401542, 127.161244],
+        'receiver04': [37.405505, 127.158401] 
+    };
+
+    // 리시버에 마커 추가
+    for (let receiver in receivers) {
+        L.marker(receivers[receiver], {icon: dotIcon}).addTo(map).bindPopup(receiver);
+    }
+
+    // 태그 ID에 따라 색상을 결정하는 함수
+    function getColorByTagId(tag_id) {
+        const colors = ["blue", "green", "red", "orange", "purple"];
+        let index = parseInt(tag_id.replace(/\D/g, '')) % colors.length;  // 태그 ID를 기반으로 색상 결정
+        return colors[index];
+    }
+
+    let markers = {};  // 여러 tag_id별로 마커를 저장
+    let circles = {};  // 여러 tag_id별로 원을 저장
+
+    function updateMap(tag_id) {
+        if(tag_id == 'ALL'){
+            fetch(`/get_all_distances`)
+                .then(response => response.json())
+                .then(data => {
+                    // 각 tag_id에 대해 처리
+                    for (let tag_id in data) {
+                        let tagData = data[tag_id];
+
+                        if (markers[tag_id]){
+                            markers[tag_id].setLatLng([tagData.latitude, tagData.longitude]);
+                        } else {
+                            // 새로운 마커 추가 (태그의 위도/경도 사용)
+                            markers[tag_id] = L.marker([tagData.latitude, tagData.longitude], {icon: sensorIcon})
+                                .addTo(map)
+                                .bindPopup(`Tag ID: ${tag_id}`);
+                        }
+                        
+                        
+                        // 각 수신기별로 원을 그림
+                        for (let receiver in receivers) {
+                            let radius = tagData[`distance_${receiver}`] || 0;
+                            
+                            // 원이 있으면 업데이트, 없으면 새로 생성
+                            if (circles[tag_id] && circles[tag_id][receiver]) {
+                                circles[tag_id][receiver].setRadius(radius);
+                                circles[tag_id][receiver].setStyle({ color: getColorByTagId(tag_id) });
+                            } else {
+                                // 태그 ID에 따라 색깔을 다르게 설정
+                                let color = getColorByTagId(tag_id); // 태그 ID에 따른 색상 함수
+                                if (!circles[tag_id]) {
+                                    circles[tag_id] = {};
+                                }
+                                circles[tag_id][receiver] = L.circle(receivers[receiver], {
+                                    color: color,  // 각 tag_id마다 다른 색상
+                                    fillOpacity: 0.5,
+                                    radius: radius
+                                }).addTo(map).bindPopup(`Tag ID: ${tag_id}`);
+                            }
+                        }
+                    }
+                });
+        } else {
+            fetch(`/get_distances/${tag_id}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (markers[tag_id]){
+                        markers[tag_id].setLatLng([data.latitude, data.longitude]);
+                    } else {
+                        // 새로운 마커 추가 (태그의 위도/경도 사용)
+                        markers[tag_id] = L.marker([data.latitude, data.longitude], {icon: sensorIcon})
+                            .addTo(map)
+                            .bindPopup(`Tag ID: ${tag_id}`);
+                    }
+
+                    // distance_receiver01~03에 따라 원을 그리기
+                    for (let receiver in receivers) {
+                        let radius = data[`distance_${receiver}`] || 0;
+    
+                        if (circles[tag_id] && circles[tag_id][receiver]) {
+                            circles[tag_id][receiver].setRadius(radius);
+                            circles[tag_id][receiver].setStyle({ color: 'blue' });
+                        } else {
+                            if (!circles[tag_id]) {
+                                circles[tag_id] = {};
+                            }
+                            circles[tag_id][receiver] = L.circle(receivers[receiver], {
+                                color: 'blue',
+                                // fillColor: '#f03',
+                                fillOpacity: 0.5,
+                                radius: radius
+                            }).addTo(map).bindPopup(`Tag ID: ${tag_id}`);
+                        }
+
+                    }
+                });
+        }
+    }
+
+    // 태그 ID 드롭다운 갱신
+    function updateTagDropdown() {
+        tag_ids = ["ALL","c1:ae:67:82:50:18", "df:42:a7:61:3e:2e","df:d7:43:b8:c9:40","ea:75:a6:51:fd:b4","f7:5c:64:04:89:36"]
+        let dropdown = document.getElementById('tagDropdown');
+        dropdown.innerHTML = '';
+        for(tag_id of tag_ids){
+            let option = document.createElement('option');
+            option.value = tag_id;
+            option.text = tag_id;
+            dropdown.add(option);
+        }
+        // fetch('/get_tag_ids')
+        //     .then(response => response.json())
+        //     .then(data => {
+        //         let dropdown = document.getElementById('tagDropdown');
+        //         dropdown.innerHTML = '';
+        //         data.forEach(tag_id => {
+        //             let option = document.createElement('option');
+        //             option.value = tag_id;
+        //             option.text = tag_id;
+        //             dropdown.add(option);
+        //         });
+        //     });
+    }
+
+    // 처음에 태그 선택
+    updateTagDropdown();
+
+    // 태그 선택 시 맵 업데이트
+    document.getElementById('tagDropdown').addEventListener('change', function () {
+        // markers 객체 순회
+        for (let tag_id in markers) {
+            if (markers[tag_id]) {
+                map.removeLayer(markers[tag_id]); // 마커 제거
+            }
+        }
+
+        // circles 객체 순회
+        for (let tag_id in circles) {
+            for (let receiver_id in circles[tag_id]) {
+                if (circles[tag_id][receiver_id]) {
+                    map.removeLayer(circles[tag_id][receiver_id]); // 원 제거
+                }
+            }
+        }
+        markers = {}
+        circles = {}
+        updateMap(this.value);
+    });
+
+    // 1초마다 맵 업데이트
+    setInterval(() => {
+        let tag_id = document.getElementById('tagDropdown').value;
+        if (tag_id) {
+            updateMap(tag_id);
+        }
+    }, 1000);
+</script>
+
+</body>
+</html>
