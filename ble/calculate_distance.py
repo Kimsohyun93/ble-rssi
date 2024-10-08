@@ -3,9 +3,10 @@ import math
 import numpy as np
 from influxdb import InfluxDBClient
 import threading
+from datetime import datetime
 
 client = InfluxDBClient(host='localhost', port=8086, database='ORBRO')
-last_query_time = int(time.time() * 1000)
+last_query_time = int(time.time() * 1000) - 1100
 
 def calculate_distance(rssi, rssi_at_1m=-52, path_loss_exponent=2.0):
     """
@@ -20,7 +21,8 @@ def calculate_distance(rssi, rssi_at_1m=-52, path_loss_exponent=2.0):
     return distance
 
 def fetch_rssi_and_calculate_distance(start, end):
-    query = f"SELECT * AS rssi_value FROM filtered_rssi WHERE time > {start} and time < {end}"
+    query = f"SELECT * AS rssi_value FROM filtered_rssi WHERE time > {start}ms and time < {end}ms"
+    print(query)
 
     result = client.query(query)
     points = list(result.get_points())
@@ -31,10 +33,10 @@ def fetch_rssi_and_calculate_distance(start, end):
         rssi_value = point['filtered_rssi']
         timestamp = point['time']
 
-        print(f"원본 RSSI (tag_id={tag_id}, receiver_name={receiver_name}): {rssi_value}")
+        # print(f"원본 RSSI (tag_id={tag_id}, receiver_name={receiver_name}): {rssi_value}")
 
         distance = calculate_distance(rssi_value)
-        print(f"추정 거리: {distance:.2f} 미터")
+        # print(f"추정 거리: {distance:.2f} 미터")
 
         # 필터링된 값을 다시 InfluxDB에 저장
         json_data = {
@@ -60,7 +62,7 @@ def start_background_thread(start, end):
 
 if __name__ == "__main__":
     while True:
-        current_time = int(time.time() * 1000)
+        current_time = int(time.time() * 1000) -100
         start_background_thread(last_query_time, current_time)
-        current_time = last_query_time
+        last_query_time = current_time
         time.sleep(1)

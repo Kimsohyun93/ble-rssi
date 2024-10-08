@@ -4,10 +4,11 @@ import threading
 from filterpy.kalman import KalmanFilter
 from influxdb import InfluxDBClient
 import numpy as np
+from datetime import datetime
 
 client = InfluxDBClient(host='localhost', port=8086, database='ORBRO')
 kalman_filters = {}
-last_query_time = int(time.time() * 1000)
+last_query_time = int(time.time() * 1000) - 100
 
 def initialize_kalman_filter(tag_id, receiver_name):
     print("initialize kalman filter")
@@ -23,7 +24,7 @@ def initialize_kalman_filter(tag_id, receiver_name):
     kalman_filters[(tag_id, receiver_name)] = kf
 
 def fetch_and_store_filtered_rssi(start, end):
-    query = f"SELECT * FROM ble_rssi WHERE time > {start} and time < {end}"
+    query = f"SELECT * FROM ble_rssi WHERE time > {start}ms and time < {end}ms"
     result = client.query(query)
     points = list(result.get_points())
 
@@ -33,7 +34,7 @@ def fetch_and_store_filtered_rssi(start, end):
         rssi_value = point['rssi']
         timestamp = point['time']
 
-        print(f"원본 RSSI (tag_id={tag_id}, receiver_name={receiver_name}): {rssi_value}")
+        # print(f"원본 RSSI (tag_id={tag_id}, receiver_name={receiver_name}): {rssi_value}")
 
         # Kalman 필터가 없는 경우 초기화
         if (tag_id, receiver_name) not in kalman_filters:
@@ -47,7 +48,7 @@ def fetch_and_store_filtered_rssi(start, end):
 
         # 필터링된 값 가져오기
         filtered_rssi = kalman_filters[(tag_id, receiver_name)].x[0, 0]
-        print(f"필터링된 RSSI (tag_id={tag_id}, receiver_name={receiver_name}): {filtered_rssi}")
+        # print(f"필터링된 RSSI (tag_id={tag_id}, receiver_name={receiver_name}): {filtered_rssi}")
 
         json_body = [{
             "measurement": "filtered_rssi",
