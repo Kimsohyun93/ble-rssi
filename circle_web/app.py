@@ -2,13 +2,14 @@ from flask import Flask, render_template, jsonify
 from influxdb import InfluxDBClient
 
 app = Flask(__name__)
-client = InfluxDBClient(host='10.252.73.96', port=8086, database='ORBRO')
+client = InfluxDBClient(host='localhost', port=8086, database='ORBRO')
 
 # 고정된 Receiver 좌표 (임의의 예시)
 receiver_coords = {
-        'receiver01': [37.405505, 127.164109],
-        'receiver02': [37.401542, 127.161244],
-        'receiver03': [37.405386, 127.158401] 
+    'receiver01': [37.405386, 127.158401],
+    'receiver02': [37.405455, 127.152693],
+    'receiver03': [37.401542, 127.164244],
+    'receiver04': [37.405505, 127.164109]
 }
 
 # 특정 tag_id에 대한 거리 데이터 가져오기
@@ -17,6 +18,7 @@ def get_tag_distances(tag_id):
     SELECT last("distance_receiver01") AS "distance_receiver01", 
            last("distance_receiver02") AS "distance_receiver02", 
            last("distance_receiver03") AS "distance_receiver03",
+           last("distance_receiver04") AS "distance_receiver04",
            last("latitude") AS "latitude", 
            last("longitude") AS "longitude"
     FROM "tag_location"
@@ -24,13 +26,14 @@ def get_tag_distances(tag_id):
     '''
     
     result = client.query(query)
-    distances = {"distance_receiver01": 0, "distance_receiver02": 0, "distance_receiver03": 0, "latitude": 0, "longitude": 0}
+    distances = {"distance_receiver01": 0, "distance_receiver02": 0, "distance_receiver03": 0, "distance_receiver04": 0, "latitude": 0, "longitude": 0}
     
     if result:
         for point in result.get_points():
             distances["distance_receiver01"] = point.get("distance_receiver01", 0)
             distances["distance_receiver02"] = point.get("distance_receiver02", 0)
             distances["distance_receiver03"] = point.get("distance_receiver03", 0)
+            distances["distance_receiver04"] = point.get("distance_receiver04", 0)
             distances["latitude"] = point.get("latitude", 0)
             distances["longitude"] = point.get("longitude", 0)
     return distances
@@ -42,6 +45,7 @@ def get_all_tag_distances():
            last("distance_receiver01") AS "distance_receiver01", 
            last("distance_receiver02") AS "distance_receiver02", 
            last("distance_receiver03") AS "distance_receiver03",
+           last("distance_receiver04") AS "distance_receiver04",
            last("latitude") AS "latitude", 
            last("longitude") AS "longitude"
     FROM "tag_location"
@@ -58,8 +62,9 @@ def get_all_tag_distances():
                 "distance_receiver01":  point['values'][0][1],
                 "distance_receiver02": point['values'][0][2],
                 "distance_receiver03": point['values'][0][3],
-                "latitude": point['values'][0][4],
-                "longitude": point['values'][0][5],
+                "distance_receiver04": point['values'][0][4],
+                "latitude": point['values'][0][5],
+                "longitude": point['values'][0][6],
             }
 
     return distances

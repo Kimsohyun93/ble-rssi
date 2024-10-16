@@ -33,7 +33,10 @@ class BLEScanner:
                 }
             }
         ]
-        self.client.write_points(json_body)
+        try :  
+            self.client.write_points(json_body)
+        except Exception as e:
+            print(e)
 
 
     # 스캔 콜백 함수

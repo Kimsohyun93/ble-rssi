@@ -27,6 +27,7 @@ def fetch_and_store_filtered_rssi(start, end):
     query = f"SELECT * FROM ble_rssi WHERE time > {start}ms and time < {end}ms"
     result = client.query(query)
     points = list(result.get_points())
+    json_body = []
 
     for point in points:
         tag_id = point['tag_id']
@@ -50,7 +51,7 @@ def fetch_and_store_filtered_rssi(start, end):
         filtered_rssi = kalman_filters[(tag_id, receiver_name)].x[0, 0]
         # print(f"필터링된 RSSI (tag_id={tag_id}, receiver_name={receiver_name}): {filtered_rssi}")
 
-        json_body = [{
+        json_data = {
             "measurement": "filtered_rssi",
             "time": timestamp,
             "tags": {
@@ -60,8 +61,12 @@ def fetch_and_store_filtered_rssi(start, end):
             "fields": {
                 "filtered_rssi": filtered_rssi
             }
-        }]
+        }
+        json_body.append(json_data)
+    try :    
         client.write_points(json_body)
+    except Exception as e:
+        print(e)
 
 def start_background_thread(start, end):
     thread = threading.Thread(target=fetch_and_store_filtered_rssi, args=(start, end, ))

@@ -19,7 +19,7 @@
 <div id="map"></div>
 
 <script>
-    let map = L.map('map').setView([37.403093, 127.160762], 17);
+    let map = L.map('map').setView([37.403093, 127.160762], 16);
     let dotIcon = L.icon({
         iconUrl: '/static/dot.png',
         iconSize: [7, 7], // size of the icon
@@ -29,19 +29,26 @@
         iconSize: [11, 11], // size of the icon
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 25,
-    }).addTo(map);
+    // L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    //     maxZoom: 25,
+    // }).addTo(map);
 
     // 리시버 좌표 추가
+    // let receivers = {
+    //     'receiver01': [37.407005, 127.164109],
+    //     // 'receiver02': [37.401542, 127.161244],
+    //     'receiver02': [37.400386, 127.164109],
+    //     'receiver03': [37.400386, 127.158401] ,
+    //     // 'receiver02': [37.401542, 127.161244],
+    //     'receiver04': [37.407005, 127.158401] 
+    // };
     let receivers = {
-        'receiver01': [37.405505, 127.164109],
-        // 'receiver02': [37.401542, 127.161244],
-        'receiver02': [37.405386, 127.158401] ,
-        'receiver03': [37.405386, 127.164109],
-        // 'receiver02': [37.401542, 127.161244],
-        'receiver04': [37.405505, 127.158401] 
-    };
+        'receiver01': [37.405386, 127.158401],
+        // 'receiver02': [37.405455, 127.152693],
+        'receiver03': [37.401542, 127.164244],
+        'receiver04': [37.405505, 127.164109]
+    }
+    
 
     // 리시버에 마커 추가
     for (let receiver in receivers) {
@@ -104,6 +111,8 @@
             fetch(`/get_distances/${tag_id}`)
                 .then(response => response.json())
                 .then(data => {
+                    console.log(data.latitude, data.longitude)
+                    console.log(data['distance_receiver01'], data['distance_receiver02'], data['distance_receiver03'], data['distance_receiver04'])
                     if (markers[tag_id]){
                         markers[tag_id].setLatLng([data.latitude, data.longitude]);
                     } else {
@@ -115,23 +124,24 @@
 
                     // distance_receiver01~03에 따라 원을 그리기
                     for (let receiver in receivers) {
-                        let radius = data[`distance_${receiver}`] || 0;
-    
-                        if (circles[tag_id] && circles[tag_id][receiver]) {
-                            circles[tag_id][receiver].setRadius(radius);
-                            circles[tag_id][receiver].setStyle({ color: 'blue' });
-                        } else {
-                            if (!circles[tag_id]) {
-                                circles[tag_id] = {};
+                        if(receiver != 'receiver02'){
+                            let radius = data[`distance_${receiver}`] || 0;
+        
+                            if (circles[tag_id] && circles[tag_id][receiver]) {
+                                circles[tag_id][receiver].setRadius(radius);
+                                circles[tag_id][receiver].setStyle({ color: 'blue' });
+                            } else {
+                                if (!circles[tag_id]) {
+                                    circles[tag_id] = {};
+                                }
+                                circles[tag_id][receiver] = L.circle(receivers[receiver], {
+                                    color: 'blue',
+                                    // fillColor: '#f03',
+                                    fillOpacity: 0.5,
+                                    radius: radius
+                                }).addTo(map).bindPopup(`Tag ID: ${tag_id}`);
                             }
-                            circles[tag_id][receiver] = L.circle(receivers[receiver], {
-                                color: 'blue',
-                                // fillColor: '#f03',
-                                fillOpacity: 0.5,
-                                radius: radius
-                            }).addTo(map).bindPopup(`Tag ID: ${tag_id}`);
                         }
-
                     }
                 });
         }
@@ -139,27 +149,27 @@
 
     // 태그 ID 드롭다운 갱신
     function updateTagDropdown() {
-        tag_ids = ["ALL","c1:ae:67:82:50:18", "df:42:a7:61:3e:2e","df:d7:43:b8:c9:40","ea:75:a6:51:fd:b4","f7:5c:64:04:89:36"]
-        let dropdown = document.getElementById('tagDropdown');
-        dropdown.innerHTML = '';
-        for(tag_id of tag_ids){
-            let option = document.createElement('option');
-            option.value = tag_id;
-            option.text = tag_id;
-            dropdown.add(option);
-        }
-        // fetch('/get_tag_ids')
-        //     .then(response => response.json())
-        //     .then(data => {
-        //         let dropdown = document.getElementById('tagDropdown');
-        //         dropdown.innerHTML = '';
-        //         data.forEach(tag_id => {
-        //             let option = document.createElement('option');
-        //             option.value = tag_id;
-        //             option.text = tag_id;
-        //             dropdown.add(option);
-        //         });
-        //     });
+        // tag_ids = ["ALL","c1:ae:67:82:50:18", "df:42:a7:61:3e:2e","df:d7:43:b8:c9:40","ea:75:a6:51:fd:b4","f7:5c:64:04:89:36"]
+        // let dropdown = document.getElementById('tagDropdown');
+        // dropdown.innerHTML = '';
+        // for(tag_id of tag_ids){
+        //     let option = document.createElement('option');
+        //     option.value = tag_id;
+        //     option.text = tag_id;
+        //     dropdown.add(option);
+        // }
+        fetch('/get_tag_ids')
+            .then(response => response.json())
+            .then(data => {
+                let dropdown = document.getElementById('tagDropdown');
+                dropdown.innerHTML = '';
+                data.forEach(tag_id => {
+                    let option = document.createElement('option');
+                    option.value = tag_id;
+                    option.text = tag_id;
+                    dropdown.add(option);
+                });
+            });
     }
 
     // 처음에 태그 선택

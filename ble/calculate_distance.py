@@ -52,7 +52,10 @@ def fetch_rssi_and_calculate_distance(start, end):
         }
         json_body.append(json_data)
 
-    client.write_points(json_body)
+    try :    
+        client.write_points(json_body)
+    except Exception as e:
+        print(e)
 
 
 def start_background_thread(start, end):
