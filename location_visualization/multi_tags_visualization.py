@@ -20,24 +20,16 @@ receivers = [
     {"name": "receiver04", "position": (459, 583)}
 ]
 
-tag_query = 'SHOW TAG VALUES FROM "tag_location" WITH KEY = "tag_id"'
-tag_ids = [point['value'] for point in client.query(tag_query).get_points()]
-
 # GUI 설정
 root = tk.Tk()
 root.title("Select Tag ID")
 root.geometry("1000x1200")
 
-# 선택된 tag_id 저장
-selected_tag_id = tk.StringVar(value=tag_ids[0])
 selected_time = tk.IntVar(value=0)  # 슬라이더 초기 위치
 
 # 기본 Unix 시간 범위 (초기값)
 # start_time = (int(tm.time()) - 3600 ) # 현재 시간에서 1시간 전
 # end_time = int(tm.time()) # 현재 시간
-
-# start_time = 1728716400 # 2024-10-12 16:00:00 (Sat)
-# end_time = 1728732600 # 2024-10-12 20:30:00 (Sat)
 
 start_time = 1728716400 # 2024-10-12 13:00:00 (Sat)
 end_time = 1728732600 # 2024-10-12 14:00:00 (Sat)
@@ -62,11 +54,11 @@ canvas.create_image(0, 0, anchor=tk.NW, image=bg_photo)
 name_label = tk.Label(root, text="", bg="yellow")
 name_label.place_forget()  # 처음에는 보이지 않게 설정
 
-# Oval 정보 저장 (oval ID와 수신기 정보 매핑)
-ovals = [] # receivers
+# Receiver Oval 정보 저장
+ovals = []
 
-# Oval 정보 저장 (oval ID와 수신기 정보 매핑)
-tag_positions = []
+# Tag Oval 정보 저장
+tags = []
 
 # oval_id = canvas.create_oval(receivers[2]['position'][0] -50,receivers[2]['position'][1] -50,receivers[2]['position'][0] +50,receivers[2]['position'][1] +50, fill='yellow' )
 
@@ -78,17 +70,18 @@ for receiver in receivers :
 # 마우스가 움직일 때 호출되는 함수
 def on_mouse_move(event):
     # 마우스의 x, y 좌표
+    global ovals, tags
     mouse_x, mouse_y = event.x, event.y
-
+    all_ovals = ovals + tags
     # 각 수신기 영역에 마우스가 들어갔는지 확인
-    for oval in ovals:
+    for oval in all_ovals:
         oval_id = oval['id']
-        receiver_name = oval['name']
+        name = oval['name']
         x0, y0, x1, y1 = canvas.coords(oval_id)  # Oval의 좌표 가져오기
-
+        print(f"oval id : {oval_id}, oval: {oval}, coords : {canvas.coords(oval_id)}")
         # 마우스가 Oval 범위 내에 있을 때 수신기 이름을 표시
         if x0 <= mouse_x <= x1 and y0 <= mouse_y <= y1:
-            name_label.config(text=receiver_name)
+            name_label.config(text=name)
             name_label.place(x=mouse_x-10, y=mouse_y-25)  # 마우스 위치 근처에 이름 표시
             break
     else:
@@ -98,17 +91,8 @@ def on_mouse_move(event):
 canvas.bind("<Motion>", on_mouse_move)
 
 
-# 삼각측량 기법을 통해 tag의 위치 추정
-# def trilateration(distances, positions):
-#     def objective(x):
-#         return sum((np.linalg.norm(np.array(x) - np.array(pos)) - dist) ** 2 for pos, dist in zip(positions, [d["distance"] for d in distances]))
-#     initial_guess = np.mean(positions, axis=0)
-#     result = minimize(objective, initial_guess, method='L-BFGS-B')
-#     return result.x if result.success else None
-
-
 # 삼변측량 함수 (메트릭 좌표 기준)
-def trilateration(distances, positions):
+def trilateration(distances):
     # receivers를 딕셔너리로 변환
     receiver_dict = {receiver["name"]: receiver["position"] for receiver in receivers}
     distance_dict = {distance["receiver_name"]: distance["distance"] for distance in distances}
@@ -154,13 +138,16 @@ def trilateration(distances, positions):
 
 
 # 태그의 거리 정보로 원을 그리고 태그 위치를 표시하는 함수
-def draw_tag_position(tag_position, distances):
-    # 태그 위치에 점 찍기
-    tag_id = canvas.create_oval(tag_position[0] - 5, tag_position[1] - 5, tag_position[0] + 5, tag_position[1] + 5, fill='red')
-    tag_positions.append(tag_id)
+def draw_tag_position(tag_positions):
+    for tag in tag_positions:
+        # {'id': oval_id, 'name': receiver['name'], 'position': receiver['position']}
+        # 태그 위치에 점 찍기
+        position = tag['position']
+        tag['id'] = canvas.create_oval(position[0] - 5, position[1] - 5, position[0] + 5, position[1] + 5, fill='red')
+        tags.append(tag)
 
 # InfluxDB에서 태그 위치 데이터를 가져오는 함수
-def fetch_data_and_update_tag(tag_id, timestamp):
+def fetch_data_and_update_tag(timestamp):
     # 거리 데이터를 가져오기 위한 쿼리
     query = f"""
         SELECT last(distance) as distance, receiver_name, tag_id
@@ -182,45 +169,35 @@ def fetch_data_and_update_tag(tag_id, timestamp):
             distance_values[tag_id][receiver_name] = {}
         distance_values[tag_id][receiver_name] = point
 
-    # 거리 데이터 수집
-    distances = []
-    positions = []
-    for receiver in receivers:
-        receiver_name = receiver['name']
-        receiver_position = receiver['position']
-        if receiver_name != 'receiver02' :
-            points = list(result.get_points(tags={"receiver_name": receiver_name}))
-            if points:
-                distance = points[0]["distance"] * N
-                distances.append({"receiver_name":receiver_name, "distance": distance})
-                positions.append(receiver_position)
-    print(f"distances : {distances}")
-    # 삼각측량을 통해 태그의 위치 계산
-    if len(distances) == 3:
-        tag_position = trilateration(distances, positions)
+    results = []
+    for tag_id, tag_items in distance_values.items():
+        distances = []
+        for receiver_name, items in tag_items.items() :
+            if receiver_name != 'receiver02':
+                distances.append({"receiver_name":receiver_name, "distance": items['distance'] * N})
+        if len(distances) >= 3 :
+            tag_position = trilateration(distances)
         print(f"trilateration tag position : {tag_position}")
-        if tag_position is not None:
-            tag_position = tuple(map(int, tag_position))  # 정수로 변환
-            return tag_position, distances
-    return None, distances
+
+        results.append({'name': tag_id, 'position': tag_position})
+
+    return results
     
 
 # 이미지와 태그 위치 업데이트 함수
 def update_image():
-    tag_id = selected_tag_id.get()
     timestamp = selected_time.get()
 
     # 태그 위치 및 거리 데이터 가져오기
-    tag_position, distances = fetch_data_and_update_tag(tag_id, timestamp)
+    tag_positions = fetch_data_and_update_tag(timestamp)
 
     # 기존에 그려진 태그와 원을 삭제
-    for ovals in tag_positions:
-
-        canvas.delete(ovals)
-
-    if tag_position:
+    for ovals in tags:
+        canvas.delete(ovals['id'])
+    tags.clear()
+    if tag_positions:
         # 태그 위치와 원 그리기
-        draw_tag_position(tag_position, distances)
+        draw_tag_position(tag_positions)
 
 
 # 슬라이더를 업데이트하는 함수
@@ -258,7 +235,6 @@ def play_data():
     start_time = selected_time.get()  # 슬라이더의 시작 위치
     end_time = int(end_entry.get())  # 슬라이더의 종료 위치 (실제 시간 범위로 조정)
 
-
     # 범위 내에서 데이터를 처리
     for t in range(start_time, end_time + 1):
         if not is_playing:  # 중지 버튼이 눌리면 루프를 중단
@@ -272,17 +248,6 @@ def play_data():
 def start_playback():
     playback_thread = threading.Thread(target=play_data)
     playback_thread.start()
-
-dropdown_frame = tk.Frame(root)
-dropdown_frame.pack(pady=5)
-
-# 드롭다운 메뉴 생성
-label = tk.Label(dropdown_frame, text="Select Tag ID:")
-label.pack(side=tk.LEFT, padx=10)
-
-dropdown = ttk.Combobox(dropdown_frame, textvariable=selected_tag_id, values=tag_ids)
-dropdown.bind("<<ComboboxSelected>>", on_dropdown_change)
-dropdown.pack(side=tk.LEFT, padx=5)
 
 
 slider_frame = tk.Frame(root)
