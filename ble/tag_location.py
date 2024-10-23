@@ -25,17 +25,6 @@ receiver_coords = {
     'receiver04': (37.405505, 127.164109)
 }
 
-# receiver_metric_coords = {
-#     'coord01': (-6, 4),
-#     'coord02': (-1, 4),
-#     'coord03': (1, 4) ,
-#     'coord04': (6, 4),
-#     'coord05': (-6, -4),
-#     'coord06': (-1, -4) ,
-#     'coord07': (1, -4),
-#     'coord08': (6, -4)
-# }
-
 # 위도/경도 -> 메트릭 변환 함수 (좌표 기준점 설정)
 def latlon_to_metric(lat, lon, ref_lat, ref_lon):
     dlat = math.radians(lat - ref_lat)
@@ -61,7 +50,7 @@ receiver_metric_coords = {receiver: latlon_to_metric(lat, lon, ref_lat, ref_lon)
 
 # RSSI -> 거리 변환 함수
 def rssi_to_distance(rssi, tx_power=-52, n=2):
-    return 30 ** ((tx_power - rssi) / (10 * n)) * N
+    return 10 ** ((tx_power - rssi) / (10 * n)) * N
 
 # 삼변측량 함수 (메트릭 좌표 기준)
 def trilateration(d1, d2, d3, coords):

@@ -14,6 +14,17 @@ receiver_coords = {
 
 # 특정 tag_id에 대한 거리 데이터 가져오기
 def get_tag_distances(tag_id):
+    # query = f'''
+    # SELECT last("distance_receiver01") AS "distance_receiver01", 
+    #        last("distance_receiver02") AS "distance_receiver02", 
+    #        last("distance_receiver03") AS "distance_receiver03",
+    #        last("distance_receiver04") AS "distance_receiver04",
+    #        last("latitude") AS "latitude", 
+    #        last("longitude") AS "longitude"
+    # FROM "tag_location"
+    # WHERE "tag_id" = '{tag_id}'
+    # '''
+
     query = f'''
     SELECT last("distance_receiver01") AS "distance_receiver01", 
            last("distance_receiver02") AS "distance_receiver02", 
@@ -21,10 +32,10 @@ def get_tag_distances(tag_id):
            last("distance_receiver04") AS "distance_receiver04",
            last("latitude") AS "latitude", 
            last("longitude") AS "longitude"
-    FROM "tag_location"
-    WHERE "tag_id" = '{tag_id}'
+    FROM "1012_cry"
+    WHERE "tag_id" = '{tag_id}' AND time <= 1728730800s AND time >= 1728730500s
     '''
-    
+    print(query)
     result = client.query(query)
     distances = {"distance_receiver01": 0, "distance_receiver02": 0, "distance_receiver03": 0, "distance_receiver04": 0, "latitude": 0, "longitude": 0}
     
