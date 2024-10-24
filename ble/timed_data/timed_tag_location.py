@@ -56,14 +56,14 @@ def trilateration(d1, d2, d3, coords):
 
     ########### spicy minimize
     #####################################################
-    positions = [(x1, y1), (x2, y2), (x3, y3)]
-    def objective(x):
-        return sum((np.linalg.norm(np.array(x) - np.array(pos)) - dist) ** 2 for pos, dist in zip(positions, [d1, d2, d3]))
-    initial_guess = np.mean(positions, axis=0)
-    result = minimize(objective, initial_guess, method='L-BFGS-B')
-    tag_position = result.x if result.success else None
-    if tag_position is not None:
-        return tuple(tag_position)
+    # positions = [(x1, y1), (x2, y2), (x3, y3)]
+    # def objective(x):
+    #     return sum((np.linalg.norm(np.array(x) - np.array(pos)) - dist) ** 2 for pos, dist in zip(positions, [d1, d2, d3]))
+    # initial_guess = np.mean(positions, axis=0)
+    # result = minimize(objective, initial_guess, method='L-BFGS-B')
+    # tag_position = result.x if result.success else None
+    # if tag_position is not None:
+    #     return tuple(tag_position)
 
     #####################################################
 
@@ -85,35 +85,42 @@ def trilateration(d1, d2, d3, coords):
 
     ############# with Weights
     ######################################################
-    # # Calculate weights as inverse squares of distances
-    # w1 = 1 / (d1 ** 2) if d1 != 0 else 0
-    # w2 = 1 / (d2 ** 2) if d2 != 0 else 0
-    # w3 = 1 / (d3 ** 2) if d3 != 0 else 0
-    # print("receiver1({}, {}, w: {}) : {}".format(x1, y1, w1, d1))
-    # print("receiver3({}, {}, w: {}) : {}".format(x2, y2, w2, d2))
-    # print("receiver4({}, {}, w: {}) : {}".format(x3, y3, w3, d3))
+    # Calculate weights as inverse squares of distances
+    w1 = 1 / (d1 ** 2) if d1 != 0 else 0
+    w2 = 1 / (d2 ** 2) if d2 != 0 else 0
+    w3 = 1 / (d3 ** 2) if d3 != 0 else 0
+    print("receiver1({}, {}, w: {}) : {}".format(x1, y1, w1, d1))
+    print("receiver3({}, {}, w: {}) : {}".format(x2, y2, w2, d2))
+    print("receiver4({}, {}, w: {}) : {}".format(x3, y3, w3, d3))
 
-    # # Weighted trilateration calculations
+    # Weighted trilateration calculations
     # A = 2 * (x2 - x1) * w2
     # B = 2 * (y2 - y1) * w2
     # C = (d1 ** 2 - d2 ** 2 - x1 ** 2 + x2 ** 2 - y1 ** 2 + y2 ** 2) * w2
     # D = 2 * (x3 - x1) * w3
     # E = 2 * (y3 - y1) * w3
     # F = (d1 ** 2 - d3 ** 2 - x1 ** 2 + x3 ** 2 - y1 ** 2 + y3 ** 2) * w3
+    A = (2 * (p2[0] - p1[0]) * w2) + (2 * (p2[0] - p1[0]) * w1)
+    B = (2 * (p2[1] - p1[1]) * w2) + (2 * (p2[1] - p1[1]) * w1)
+    D = (d1 ** 2 - d2 ** 2 - p1[0]**2 + p2[0]**2 - p1[1]**2 + p2[1]**2) * w2 + (d1 ** 2 - d1 ** 2 - p1[0]**2 + p1[0]**2 - p1[1]**2 + p1[1]**2) * w1
+    E = (2 * (p3[0] - p1[0]) * w3) + (2 * (p3[0] - p1[0]) * w1)
+    F = (2 * (p3[1] - p1[1]) * w3) + (2 * (p3[1] - p1[1]) * w1)
+    G = (d1 ** 2 - d3 ** 2 - p1[0]**2 + p3[0]**2 - p1[1]**2 + p3[1]**2) * w3 + (d1 ** 2 - d1 ** 2 - p1[0]**2 + p1[0]**2 - p1[1]**2 + p1[1]**2) * w1
 
-    # # Solve for x and y, handling cases where B or E is zero
-    # if B == 0 and E == 0:
-    #     print("Invalid receiver configuration for trilateration.")
-    #     return None
-    # elif B == 0:
-    #     y = F / E
-    #     x = (C - B * y) / A if A != 0 else 0
-    # elif E == 0:
-    #     y = C / B
-    #     x = (F - E * y) / D if D != 0 else 0
-    # else:
-    #     x = (C - (B * F / E)) / (A - (B * D / E))
-    #     y = (C - A * x) / B
+ 
+    # Solve for x and y, handling cases where B or E is zero
+    if B == 0 and E == 0:
+        print("Invalid receiver configuration for trilateration.")
+        return None
+    elif B == 0:
+        y = F / E
+        x = (C - B * y) / A if A != 0 else 0
+    elif E == 0:
+        y = C / B
+        x = (F - E * y) / D if D != 0 else 0
+    else:
+        x = (C - (B * F / E)) / (A - (B * D / E))
+        y = (C - A * x) / B
     ######################################################
 
     return (x, y)

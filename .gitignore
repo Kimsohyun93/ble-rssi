@@ -3,3 +3,4 @@ ble/influxdb-backup
 ble-rssi.zip
 detection_time/
 location_visualization/web
+location_visualization/least_square_method.txt

@@ -8,10 +8,9 @@ from tkinter import ttk
 import threading
 import time as tm
 
-
 client = InfluxDBClient(host='localhost', port=8086, database='ORBRO')
 
-N = 10 # 거리 데이터를 시각적으로 표현하기 위해 적절한 배율 사용
+N = 2 # 거리 데이터를 시각적으로 표현하기 위해 적절한 배율 사용
 
 receivers = [
     {"name": "receiver01", "position": (429, 538)},
@@ -98,26 +97,26 @@ def on_mouse_move(event):
 canvas.bind("<Motion>", on_mouse_move)
 
 
-# 삼각측량 기법을 통해 tag의 위치 추정
-def trilateration(distances, positions):
-    def objective(x):
-        return sum((np.linalg.norm(np.array(x) - np.array(pos)) - dist) ** 2 for pos, dist in zip(positions, [d["distance"] for d in distances]))
-    initial_guess = np.mean(positions, axis=0)
-    result = minimize(objective, initial_guess, method='L-BFGS-B')
-    return result.x if result.success else None
+# # 삼각측량 기법을 통해 tag의 위치 추정
+# def trilateration(distances, positions):
+#     def objective(x):
+#         return sum((np.linalg.norm(np.array(x) - np.array(pos)) - dist) ** 2 for pos, dist in zip(positions, [d["distance"] for d in distances]))
+#     initial_guess = np.mean(positions, axis=0)
+#     result = minimize(objective, initial_guess, method='L-BFGS-B')
+#     return result.x if result.success else None
 
 
-# # 삼변측량 함수 (메트릭 좌표 기준)
+# 삼변측량 함수 (메트릭 좌표 기준)
 # def trilateration(distances, positions):
 #     # receivers를 딕셔너리로 변환
 #     receiver_dict = {receiver["name"]: receiver["position"] for receiver in receivers}
 #     distance_dict = {distance["receiver_name"]: distance["distance"] for distance in distances}
 #     # 원하는 좌표 가져오기
 #     x1, y1 = receiver_dict["receiver01"]  # Receiver 1 coordinates
-#     x2, y2 = receiver_dict["receiver03"]  # Receiver 2 coordinates
+#     x2, y2 = receiver_dict["receiver02"]  # Receiver 2 coordinates
 #     x3, y3 = receiver_dict["receiver04"]  # Receiver 3 coordinates
 #     d1 = distance_dict["receiver01"]
-#     d2 = distance_dict["receiver03"]
+#     d2 = distance_dict["receiver02"]
 #     d3 = distance_dict["receiver04"]
 
 #     print("receiver1({}, {}) : {}".format(x1, y1, d1))
@@ -125,38 +124,75 @@ def trilateration(distances, positions):
 #     print("receiver4({}, {}) : {}".format(x3, y3, d3))
 
 #     # # Calculate weights as inverse squares of distances
-#     # w1 = 1 / (d1 ** 2) if d1 != 0 else 0
-#     # w2 = 1 / (d2 ** 2) if d2 != 0 else 0
-#     # w3 = 1 / (d3 ** 2) if d3 != 0 else 0
+#     w1 = 1 / (d1 ** 2) if d1 != 0 else 0
+#     w2 = 1 / (d2 ** 2) if d2 != 0 else 0
+#     w3 = 1 / (d3 ** 2) if d3 != 0 else 0
 
 #     # Weighted trilateration calculations
-#     A = 2 * (x2 - x1)
-#     B = 2 * (y2 - y1)
-#     C = (d1 ** 2 - d2 ** 2 - x1 ** 2 + x2 ** 2 - y1 ** 2 + y2 ** 2)
-#     D = 2 * (x3 - x1)
-#     E = 2 * (y3 - y1)
-#     F = (d1 ** 2 - d3 ** 2 - x1 ** 2 + x3 ** 2 - y1 ** 2 + y3 ** 2)
+#     A = 2 * (x2 - x1) * w2
+#     B = 2 * (y2 - y1) * w2
+#     C = (d1 ** 2 - d2 ** 2 - x1 ** 2 + x2 ** 2 - y1 ** 2 + y2 ** 2) * w2
+#     D = 2 * (x3 - x1) * w3
+#     E = 2 * (y3 - y1) * w3
+#     F = (d1 ** 2 - d3 ** 2 - x1 ** 2 + x3 ** 2 - y1 ** 2 + y3 ** 2) * w3
 
-#     # # Solve for x and y, handling cases where B or E is zero
-#     # if B == 0 and E == 0:
-#     #     print("Invalid receiver configuration for trilateration.")
-#     #     return None
-#     # elif B == 0:
-#     #     y = F / E
-#     #     x = (C - B * y) / A if A != 0 else 0
-#     # elif E == 0:
-#     #     y = C / B
-#     #     x = (F - E * y) / D if D != 0 else 0
-#     # else:
-#     #     x = (C - (B * F / E)) / (A - (B * D / E))
-#     #     y = (C - A * x) / B
-#     x = (C - (B * F / E)) / (A - (B * D / E))
-#     y = (C - A * x) / B
+#     # Solve for x and y, handling cases where B or E is zero
+#     if B == 0 and E == 0:
+#         print("Invalid receiver configuration for trilateration.")
+#         return None
+#     elif B == 0:
+#         y = F / E
+#         x = (C - B * y) / A if A != 0 else 0
+#     elif E == 0:
+#         y = C / B
+#         x = (F - E * y) / D if D != 0 else 0
+#     else:
+#         x = (C - (B * F / E)) / (A - (B * D / E))
+#         y = (C - A * x) / B
     
-#     # return np.array([x, y])
-
 #     return (x, y)
 
+
+# def trilateration(distances, positions):
+#     def objective(x):
+#         # 각 위치와의 거리 차이를 최소화하는 함수
+#         return sum((np.linalg.norm(np.array(x) - np.array(pos)) - dist) ** 2 for pos, dist in zip(positions, [d["distance"] for d in distances]))
+    
+#     # 제약 조건: 세 원의 중심에서 적어도 한 원의 반지름 내에 있어야 함
+#     def constraint(x):
+#         return [dist - np.linalg.norm(np.array(x) - np.array(pos)) for pos, dist in zip(positions,  [d["distance"] for d in distances])]
+    
+#     initial_guess = np.mean(positions, axis=0)
+    
+#     # 제약 조건을 설정 (모든 원의 중심에서 각 거리가 해당 반지름보다 작도록 설정)
+#     constraints = ({'type': 'ineq', 'fun': lambda x: np.array(constraint(x))})
+    
+#     result = minimize(objective, initial_guess, constraints=constraints)
+#     print(result)
+#     return result.x if result.success else None
+
+def trilateration(distances, positions):
+    matrixA = []
+    matrixB = []
+
+    x0, y0, r0 = distances[0]['centerX'], distances[0]['centerY'], distances[0]['distance']
+
+    for idx in range(1, len(distances)) :
+        x,y,r = distances[idx]['centerX'], distances[idx]['centerY'], distances[idx]['distance']
+        matrixA.append([x - x0, y - y0])
+        matrixB.append([
+            (x**2 + y**2 - r**2) - (x0**2 + y0**2 - r0**2)
+        ])
+
+    matrixA = np.array(matrixA)
+    matrixB = np.array(matrixB).reshape(-1, 1) / 2  # 나눗셈은 2로 나눈 결과로 처리
+    # (A^T * A)^-1 * A^T * B 계산
+    matrixA_transpose = matrixA.T
+    matrix_inverse = np.linalg.inv(np.dot(matrixA_transpose, matrixA))
+    matrix_dot = np.dot(matrix_inverse, matrixA_transpose)
+    position = np.dot(matrix_dot, matrixB)
+
+    return position.flatten()
 
 # 태그의 거리 정보로 원을 그리고 태그 위치를 표시하는 함수
 def draw_tag_position(tag_position, distances):
@@ -189,15 +225,17 @@ def fetch_data_and_update_tag(tag_id, timestamp):
     for receiver in receivers:
         receiver_name = receiver['name']
         receiver_position = receiver['position']
-        if receiver_name != 'receiver02' :
-            points = list(result.get_points(tags={"receiver_name": receiver_name}))
-            if points:
-                distance = points[0]["distance"] * N
-                distances.append({"receiver_name":receiver_name, "distance": distance})
-                positions.append(receiver_position)
-    print(f"distances : {distances}")
+        # if receiver_name != 'receiver02' :
+        
+        points = list(result.get_points(tags={"receiver_name": receiver_name}))
+        if points:
+            distance = points[0]["distance"] * N
+            # distances.append({"receiver_name":receiver_name, "distance": distance})
+            distances.append({"receiver_name":receiver_name, "centerX":receiver_position[0], "centerY":receiver_position[1], "distance": distance})
+            positions.append(receiver_position)
+    # print(f"distances : {distances}")
     # 삼각측량을 통해 태그의 위치 계산
-    if len(distances) == 3:
+    if len(distances) >= 3:
         tag_position = trilateration(distances, positions)
         print(f"trilateration tag position : {tag_position}")
         if tag_position is not None:
