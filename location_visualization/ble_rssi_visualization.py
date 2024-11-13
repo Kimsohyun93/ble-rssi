@@ -7,10 +7,12 @@ import tkinter as tk
 from tkinter import ttk
 import threading
 import time as tm
+from datetime import datetime
+import pytz
 
 client = InfluxDBClient(host='localhost', port=8086, database='ORBRO')
 
-N = 2 # 거리 데이터를 시각적으로 표현하기 위해 적절한 배율 사용
+N = 3 # 거리 데이터를 시각적으로 표현하기 위해 적절한 배율 사용
 
 receivers = [
     {"name": "receiver01", "position": (429, 538)},
@@ -31,15 +33,29 @@ root.geometry("1000x1200")
 selected_tag_id = tk.StringVar(value=tag_ids[0])
 selected_time = tk.IntVar(value=0)  # 슬라이더 초기 위치
 
-# 기본 Unix 시간 범위 (초기값)
-# start_time = (int(tm.time()) - 3600 ) # 현재 시간에서 1시간 전
-# end_time = int(tm.time()) # 현재 시간
+def kst_to_utc_timestamp(datetime_str):
+    # 문자열을 datetime 객체로 변환
+    kst = pytz.timezone("Asia/Seoul")
+    dt_kst = kst.localize(datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S"))
+    # UTC로 변환하여 UNIX 타임스탬프로 변환
+    dt_utc = dt_kst.astimezone(pytz.utc)
+    return int(dt_utc.timestamp())
 
-# start_time = 1728716400 # 2024-10-12 16:00:00 (Sat)
-# end_time = 1728732600 # 2024-10-12 20:30:00 (Sat)
+# UNIX 타임스탬프를 KST 시간으로 변환하는 함수
+def timestamp_to_kst(unix_time):
+    kst = pytz.timezone("Asia/Seoul")            # KST 타임존 객체 생성
+    dt = datetime.fromtimestamp(unix_time, kst)  # KST 시간으로 변환
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
 
-start_time = 1728716400 # 2024-10-12 13:00:00 (Sat)
-end_time = 1728732600 # 2024-10-12 14:00:00 (Sat)
+start_time_str = "2024-10-12 15:35:00"
+end_time_str = "2024-10-12 15:40:00"
+
+start_time = kst_to_utc_timestamp(start_time_str)
+end_time = kst_to_utc_timestamp(end_time_str)
+
+print("Start Time (Unix UTC):", start_time)
+print("End Time (Unix UTC):", end_time)
+
 
 # 재생 여부를 제어하는 변수
 is_playing = False
@@ -61,10 +77,10 @@ canvas.create_image(0, 0, anchor=tk.NW, image=bg_photo)
 name_label = tk.Label(root, text="", bg="yellow")
 name_label.place_forget()  # 처음에는 보이지 않게 설정
 
-# Oval 정보 저장 (oval ID와 수신기 정보 매핑)
+# Receiver oval 저장
 ovals = [] # receivers
 
-# Oval 정보 저장 (oval ID와 수신기 정보 매핑)
+# Tags oval 저장
 tag_positions = []
 
 # oval_id = canvas.create_oval(receivers[2]['position'][0] -50,receivers[2]['position'][1] -50,receivers[2]['position'][0] +50,receivers[2]['position'][1] +50, fill='yellow' )
@@ -153,6 +169,7 @@ canvas.bind("<Motion>", on_mouse_move)
 #     return (x, y)
 
 
+###### 세 원이 교차하는 최소거리 지점 찾기
 # def trilateration(distances, positions):
 #     def objective(x):
 #         # 각 위치와의 거리 차이를 최소화하는 함수
@@ -196,17 +213,28 @@ def trilateration(distances, positions):
 
 # 태그의 거리 정보로 원을 그리고 태그 위치를 표시하는 함수
 def draw_tag_position(tag_position, distances):
-    # 태그 위치에 점 찍기
-    tag_id = canvas.create_oval(tag_position[0] - 5, tag_position[1] - 5, tag_position[0] + 5, tag_position[1] + 5, fill='red')
-    tag_positions.append(tag_id)
+    radius = 5
+    if tag_position:
+        tag_id = canvas.create_oval(tag_position[0] - radius, tag_position[1] - radius, tag_position[0] + radius, tag_position[1] + radius, fill='red')
+        tag_positions.append(tag_id)
     # 각 수신기로부터 태그까지의 거리 표시 (원을 그림)
     for d in distances:
         receiver_name = d["receiver_name"]
-        radius = d["distance"]
+        d_radius = d["distance"]
         receiver_pos = [r["position"] for r in receivers if r["name"] == receiver_name][0]
-        tag_distance = canvas.create_oval(receiver_pos[0] - radius, receiver_pos[1] - radius, receiver_pos[0] + radius, receiver_pos[1] + radius, outline='red',  width=2)
+        tag_distance = canvas.create_oval(receiver_pos[0] - d_radius, receiver_pos[1] - d_radius, receiver_pos[0] + d_radius, receiver_pos[1] + d_radius, outline='red',  width=2)
         tag_positions.append(tag_distance)
 
+
+def get_top_3_closest(distances, positions):
+    # distance 값을 기준으로 distances와 positions을 함께 정렬
+    sorted_distances_positions = sorted(zip(distances, positions), key=lambda x: x[0]['distance'])
+    
+    # 상위 3개의 distances와 positions을 분리하여 반환
+    selected_distances = [item[0] for item in sorted_distances_positions[:3]]
+    selected_positions = [item[1] for item in sorted_distances_positions[:3]]
+    
+    return selected_distances, selected_positions
 
 # InfluxDB에서 태그 위치 데이터를 가져오는 함수
 def fetch_data_and_update_tag(tag_id, timestamp):
@@ -225,7 +253,7 @@ def fetch_data_and_update_tag(tag_id, timestamp):
     for receiver in receivers:
         receiver_name = receiver['name']
         receiver_position = receiver['position']
-        # if receiver_name != 'receiver02' :
+        # if receiver_name != 'receiver01' :
         
         points = list(result.get_points(tags={"receiver_name": receiver_name}))
         if points:
@@ -233,21 +261,31 @@ def fetch_data_and_update_tag(tag_id, timestamp):
             # distances.append({"receiver_name":receiver_name, "distance": distance})
             distances.append({"receiver_name":receiver_name, "centerX":receiver_position[0], "centerY":receiver_position[1], "distance": distance})
             positions.append(receiver_position)
+
+    print("distances", distances)
+    print("positions", positions)
+
+    selected_distances, selected_positions = get_top_3_closest(distances, positions)
+    # selected_distances, selected_positions = distances, positions
+
     # print(f"distances : {distances}")
     # 삼각측량을 통해 태그의 위치 계산
-    if len(distances) >= 3:
-        tag_position = trilateration(distances, positions)
+    if len(selected_distances) >= 3:
+        tag_position = trilateration(selected_distances, selected_positions)
         print(f"trilateration tag position : {tag_position}")
         if tag_position is not None:
             tag_position = tuple(map(int, tag_position))  # 정수로 변환
-            return tag_position, distances
-    return None, distances
+            return tag_position, selected_distances
+    return None, selected_distances
     
 
 # 이미지와 태그 위치 업데이트 함수
 def update_image():
     tag_id = selected_tag_id.get()
     timestamp = selected_time.get()
+
+    kst_time_str = timestamp_to_kst(timestamp)  # 선택된 시간을 KST 형식으로 변환
+    time_label.config(text=kst_time_str)     
 
     # 태그 위치 및 거리 데이터 가져오기
     tag_position, distances = fetch_data_and_update_tag(tag_id, timestamp)
@@ -257,21 +295,24 @@ def update_image():
 
         canvas.delete(ovals)
 
-    
-    if tag_position:
-        # 태그 위치와 원 그리기
-        draw_tag_position(tag_position, distances)
+    # if tag_position:
+    # 태그 위치와 원 그리기
+    draw_tag_position(tag_position, distances)
 
 
 # 슬라이더를 업데이트하는 함수
 def update_slider_range():
     try:
-        new_start_time = int(start_entry.get())
-        new_end_time = int(end_entry.get())
+        new_start_time = kst_to_utc_timestamp(start_entry.get())
+        new_end_time = kst_to_utc_timestamp(end_entry.get())
 
         if new_start_time < new_end_time:
+            # slider from to update
             slider.config(from_=new_start_time, to=new_end_time)
             selected_time.set(new_start_time)
+            # slider time label
+            kst_time_str = timestamp_to_kst(new_start_time)  # 선택된 시간을 KST 형식으로 변환
+            time_label.config(text=kst_time_str)
         else:
             print("Start time must be less than end time.")
     except ValueError:
@@ -296,7 +337,7 @@ def play_data():
     is_playing = True  # 재생 시작을 위한 변수 설정
 
     start_time = selected_time.get()  # 슬라이더의 시작 위치
-    end_time = int(end_entry.get())  # 슬라이더의 종료 위치 (실제 시간 범위로 조정)
+    end_time = kst_to_utc_timestamp(end_entry.get())  # 슬라이더의 종료 위치 (실제 시간 범위로 조정)
 
 
     # 범위 내에서 데이터를 처리
@@ -322,8 +363,18 @@ label.pack(side=tk.LEFT, padx=10)
 
 dropdown = ttk.Combobox(dropdown_frame, textvariable=selected_tag_id, values=tag_ids)
 dropdown.bind("<<ComboboxSelected>>", on_dropdown_change)
+dropdown.config(font=("Arial", 10))
 dropdown.pack(side=tk.LEFT, padx=5)
 
+timelabel_frame = tk.Frame(root)
+timelabel_frame.pack(pady=5)
+
+# 드롭다운 메뉴 생성
+label = tk.Label(timelabel_frame, text="Time :")
+label.pack(side=tk.LEFT, padx=10)
+
+time_label = tk.Label(timelabel_frame, text=timestamp_to_kst(start_time), font=("Arial", 10))
+time_label.pack(side=tk.LEFT, padx=5)
 
 slider_frame = tk.Frame(root)
 slider_frame.pack(pady=5)
@@ -342,19 +393,19 @@ timestamp_frame = tk.Frame(root)
 timestamp_frame.pack(pady=5)
 
 # Unix timestamp 입력을 위한 Label과 Entry 생성 (starttime)
-start_label = tk.Label(timestamp_frame, text="Start Time (Unix Timestamp(s)):")
+start_label = tk.Label(timestamp_frame, text="Start Time (KST YYYY-mm-dd hh:mm:ss):")
 start_label.pack(side=tk.LEFT, padx=10)
 
 start_entry = tk.Entry(timestamp_frame)
-start_entry.insert(0, int(start_time))  # 초기값으로 start_time 설정
+start_entry.insert(0, start_time_str)  # 초기값으로 start_time 설정
 start_entry.pack(side=tk.LEFT, padx=5)
 
 # Unix timestamp 입력을 위한 Label과 Entry 생성 (endtime)
-end_label = tk.Label(timestamp_frame, text="End Time (Unix Timestamp(s)):")
+end_label = tk.Label(timestamp_frame, text="End Time (KST YYYY-mm-dd hh:mm:ss):")
 end_label.pack(side=tk.LEFT, padx=10)
 
 end_entry = tk.Entry(timestamp_frame)
-end_entry.insert(0, int(end_time))  # 초기값으로 end_time 설정
+end_entry.insert(0, end_time_str)  # 초기값으로 end_time 설정
 end_entry.pack(side=tk.LEFT, padx=5)
 
 # 입력된 값으로 슬라이더 범위를 업데이트하는 버튼
